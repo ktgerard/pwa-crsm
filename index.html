@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <title>Cut Room Supply Manager</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header>
+  <div><strong>Cut Room Supply Manager</strong><span id="statusText">Connecting…</span></div>
+  <button id="signOutBtn" class="ghost hidden">Sign out</button>
+</header>
+
+<main>
+  <section id="loginView" class="card narrow">
+    <h1>Sign in</h1>
+    <p>Use your Supabase-authenticated email to access the supply manager.</p>
+    <label>Email<input id="email" type="email" autocomplete="email"></label>
+    <label>Password<input id="password" type="password" autocomplete="current-password"></label>
+    <button id="signInBtn">Sign in</button>
+    <p id="loginMsg" class="msg"></p>
+  </section>
+
+  <section id="appView" class="hidden">
+    <nav class="main-tabs">
+      <button data-view="master" class="active">Master Supply List</button>
+      <button data-view="count">Monthly Count</button>
+    </nav>
+
+    <section id="masterView">
+      <div class="toolbar">
+        <input id="search" type="search" placeholder="Search supplies, SKU or part #">
+        <div id="vendorTabs" class="vendor-tabs"></div>
+      </div>
+      <div id="masterList"></div>
+    </section>
+
+    <section id="countView" class="hidden">
+      <div class="count-actions card">
+        <div>
+          <strong id="sessionTitle">No active count</strong>
+          <div id="sessionMeta" class="muted"></div>
+        </div>
+        <div class="button-row">
+          <button id="newCountBtn">Start New Count</button>
+          <button id="completeCountBtn" class="secondary hidden">Complete Count</button>
+        </div>
+      </div>
+      <div id="countGroups"></div>
+    </section>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
