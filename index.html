@@ -28,6 +28,7 @@
     <nav class="main-tabs">
       <button data-view="master" class="active">Master Supply List</button>
       <button data-view="count">Monthly Count</button>
+      <button data-view="order">Order Review</button>
     </nav>
 
     <section id="masterView">
@@ -51,6 +52,20 @@
         </div>
       </div>
       <div id="countGroups"></div>
+    </section>
+
+    <section id="orderView" class="hidden">
+      <div class="count-actions card">
+        <div>
+          <strong>Order Review</strong>
+          <div id="orderMeta" class="muted">Refresh from the current draft or latest completed count.</div>
+        </div>
+        <div class="button-row">
+          <button id="refreshOrderBtn">Refresh from Count</button>
+          <button id="generateOrderBtn" class="secondary hidden">Generate Order</button>
+        </div>
+      </div>
+      <div id="orderGroups"></div>
     </section>
   </section>
 </main>

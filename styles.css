@@ -15,3 +15,16 @@ button{border:0;border-radius:8px;padding:11px 15px;background:#111827;color:whi
 @media print{header,.main-tabs,.toolbar,.count-actions{display:none!important}main{padding:0}.card,.supply-row,.count-row{break-inside:avoid}}
 
 .danger{background:#991b1b}.saved-badge{font-size:12px;font-weight:700;color:#166534}.saving-badge{font-size:12px;font-weight:700;color:#92400e}.save-error{font-size:12px;font-weight:700;color:#991b1b}
+
+.order-card{margin:12px 0;padding:0;overflow:hidden}
+.order-card h3{margin:0;padding:12px 14px;background:#f3f4f6}
+.order-table{width:100%;border-collapse:collapse}
+.order-table th,.order-table td{padding:9px 8px;border-top:1px solid #e5e7eb;text-align:left;vertical-align:middle}
+.order-table th{font-size:.82rem;background:#fafafa}
+.order-table input{width:76px}
+.order-total{padding:10px 14px;text-align:right;font-weight:700;background:#fafafa;border-top:1px solid #e5e7eb}
+@media(max-width:760px){
+ .order-table{font-size:.86rem}
+ .order-table th:nth-child(4),.order-table td:nth-child(4),
+ .order-table th:nth-child(5),.order-table td:nth-child(5){display:none}
+}

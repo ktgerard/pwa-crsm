@@ -3,7 +3,7 @@ const cfg=window.CUTROOM_CONFIG;
 const db=window.supabase.createClient(cfg.supabaseUrl,cfg.supabaseKey);
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
-let items=[], vendors=[], groups=[], vendorItems=[], currentVendor='All', currentSession=null, counts=new Map();
+let items=[], vendors=[], groups=[], vendorItems=[], currentVendor='All', currentSession=null, counts=new Map(), orderSession=null, orderCounts=new Map(), orderDraft=new Map();
 
 function esc(v=''){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function money(v){return v==null||v===''?'—':new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(v)}
@@ -71,6 +71,8 @@ $$('.main-tabs button').forEach(b=>b.onclick=()=>{
   $$('.main-tabs button').forEach(x=>x.classList.toggle('active',x===b));
   $('#masterView').classList.toggle('hidden',b.dataset.view!=='master');
   $('#countView').classList.toggle('hidden',b.dataset.view!=='count');
+  $('#orderView').classList.toggle('hidden',b.dataset.view!=='order');
+  if(b.dataset.view==='order') refreshOrderReview();
 });
 
 async function resumeDraft(){
@@ -90,6 +92,106 @@ async function saveCount(i,input,badge){const q=Number(input.value);if(!Number.i
 function updateProgress(){const monthly=countableItems();$('#sessionMeta').textContent=currentSession?`${counts.size?`${counts.size} of ${monthly.length} items saved`:'Empty draft'} · Started ${new Date(currentSession.created_at).toLocaleString()}`:'Start a count to enter quantities.';groups.filter(g=>g.count_monthly_flag).forEach(g=>{const list=monthly.filter(i=>i.presentation_group_id===g.presentation_group_id),el=document.querySelector(`[data-progress="${g.presentation_group_id}"]`);if(el)el.textContent=`${list.filter(i=>counts.has(i.supply_item_id)).length} of ${list.length} counted`})}
 function renderCount(){const monthly=countableItems();$('#sessionTitle').textContent=currentSession?(counts.size?'Monthly Count — Draft':'Monthly Count — Empty Draft'):'No active count';$('#sessionMeta').textContent=currentSession?`${counts.size?`${counts.size} of ${monthly.length} items saved`:'Empty draft'} · Started ${new Date(currentSession.created_at).toLocaleString()}`:'Start a count to enter quantities.';$('#newCountBtn').textContent=currentSession?'Resume Draft Count':'Start New Count';$('#discardCountBtn').classList.toggle('hidden',!currentSession);$('#completeCountBtn').classList.toggle('hidden',!currentSession);$('#countGroups').innerHTML=groups.filter(g=>g.count_monthly_flag).map(g=>{const list=monthly.filter(i=>i.presentation_group_id===g.presentation_group_id).sort((a,b)=>(a.presentation_sort_order??9999)-(b.presentation_sort_order??9999));const done=list.filter(i=>counts.has(i.supply_item_id)).length;return `<details class="group" open><summary><span>${esc(g.group_name)}</span><span data-progress="${g.presentation_group_id}">${done} of ${list.length} counted</span></summary>${list.map(i=>{const c=counts.get(i.supply_item_id),q=c?.quantity_on_hand??'',sg=q===''?null:suggestion(i,q);return `<div class="count-row ${sg>0?'order-needed':''}"><div><div class="item-name">${esc(i.item_description)}</div><div class="sub">${esc(vendorName(viFor(i.supply_item_id)?.vendor_id)||'')}</div><span class="save-state ${c?'saved-badge':''}">${c?'Saved':''}</span></div><div><span class="sub">Min</span><br>${esc(i.minimum_quantity??'—')}</div><div><span class="sub">Max</span><br>${esc(i.maximum_quantity??'—')}</div><div><input inputmode="decimal" type="number" min="0" step="any" value="${esc(q)}" data-id="${i.supply_item_id}" placeholder="Qty"></div><div><span class="sub">Suggested order</span><br><span class="suggest">${sg==null?'—':sg}</span></div></div>`}).join('')}</details>`}).join('');$$('#countGroups input').forEach(inp=>{const item=items.find(i=>i.supply_item_id===inp.dataset.id);inp.oninput=()=>{const sg=suggestion(item,inp.value),row=inp.closest('.count-row');row.querySelector('.suggest').textContent=sg==null?'—':sg;row.classList.toggle('order-needed',sg>0);queueSave(item,inp)}})}
 $('#completeCountBtn').onclick=async()=>{await new Promise(r=>setTimeout(r,450));const monthly=countableItems();if(counts.size<monthly.length&&!confirm(`Only ${counts.size} of ${monthly.length} monthly items have been saved. Complete anyway?`))return;const {error}=await db.from('cutroom_inventory_sessions').update({status:'completed',completed_at:new Date().toISOString()}).eq('inventory_session_id',currentSession.inventory_session_id);if(error){alert(error.message);return}alert('Monthly count completed.');currentSession=null;counts.clear();renderCount()};
+
+
+async function loadOrderSource(){
+  if(currentSession){
+    orderSession=currentSession;
+    orderCounts=new Map(counts);
+    return true;
+  }
+  const {data:sessions,error}=await db.from('cutroom_inventory_sessions').select('*').eq('status','completed').order('completed_at',{ascending:false}).limit(1);
+  if(error){alert(error.message);return false}
+  if(!sessions?.length){orderSession=null;orderCounts.clear();return false}
+  orderSession=sessions[0];
+  const {data,error:countError}=await db.from('cutroom_inventory_counts').select('*').eq('inventory_session_id',orderSession.inventory_session_id);
+  if(countError){alert(countError.message);return false}
+  orderCounts=new Map((data||[]).map(x=>[x.supply_item_id,x]));
+  return true;
+}
+async function refreshOrderReview(){
+  const ok=await loadOrderSource();
+  orderDraft.clear();
+  if(!ok){
+    $('#orderMeta').textContent='No draft or completed inventory count is available yet.';
+    $('#orderGroups').innerHTML='';
+    $('#generateOrderBtn').classList.add('hidden');
+    return;
+  }
+  countableItems().forEach(item=>{
+    const c=orderCounts.get(item.supply_item_id);
+    if(!c)return;
+    const suggested=Math.max(0,Number(c.suggested_order_quantity||0));
+    if(suggested<=0)return;
+    const vi=viFor(item.supply_item_id);
+    if(!vi)return;
+    orderDraft.set(item.supply_item_id,{item,count:c,vi,orderQty:suggested});
+  });
+  renderOrderReview();
+}
+function renderOrderReview(){
+  const host=$('#orderGroups');host.innerHTML='';
+  const sourceLabel=orderSession?.status==='draft'?'current draft':'latest completed count';
+  if(!orderDraft.size){
+    $('#orderMeta').textContent=`Using ${sourceLabel}. No items currently need replenishment.`;
+    $('#generateOrderBtn').classList.add('hidden');
+    return;
+  }
+  const byVendor=new Map();
+  [...orderDraft.values()].forEach(x=>{
+    const name=vendorName(x.vi.vendor_id)||'Unassigned Vendor';
+    if(!byVendor.has(name))byVendor.set(name,[]);
+    byVendor.get(name).push(x);
+  });
+  let grand=0,lineCount=0;
+  [...byVendor.entries()].sort((a,b)=>a[0].localeCompare(b[0])).forEach(([name,rows])=>{
+    const card=document.createElement('section');card.className='card order-card';
+    card.innerHTML=`<h3>${esc(name)}</h3>`;
+    const table=document.createElement('table');table.className='order-table';
+    table.innerHTML='<thead><tr><th>Item</th><th>SKU / Part #</th><th>On Hand</th><th>Min</th><th>Max</th><th>Suggested</th><th>Order Qty</th><th>Unit</th><th>Ext.</th></tr></thead>';
+    const body=document.createElement('tbody');let vendorTotal=0;
+    rows.sort((a,b)=>a.item.item_description.localeCompare(b.item.item_description)).forEach(x=>{
+      const price=Number(x.vi.current_price||0),ext=price*Number(x.orderQty||0);
+      vendorTotal+=ext;grand+=ext;if(x.orderQty>0)lineCount++;
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td>${esc(x.item.item_description)}</td><td>${esc(x.vi.vendor_part_number||x.vi.sku||'—')}</td><td>${esc(x.count.quantity_on_hand)}</td><td>${esc(x.item.minimum_quantity??'—')}</td><td>${esc(x.item.maximum_quantity??'—')}</td><td>${esc(x.count.suggested_order_quantity??0)}</td><td></td><td>${money(price)}</td><td>${money(ext)}</td>`;
+      const input=document.createElement('input');input.type='number';input.inputMode='numeric';input.min='0';input.step='1';input.value=x.orderQty;
+      input.onchange=()=>{x.orderQty=Math.max(0,Number(input.value||0));renderOrderReview()};
+      tr.children[6].appendChild(input);body.appendChild(tr);
+    });
+    table.appendChild(body);card.appendChild(table);
+    const total=document.createElement('div');total.className='order-total';total.textContent=`Supplier total: ${money(vendorTotal)}`;card.appendChild(total);host.appendChild(card);
+  });
+  $('#orderMeta').textContent=`Using ${sourceLabel} · ${lineCount} order line${lineCount===1?'':'s'} · Estimated total ${money(grand)}`;
+  $('#generateOrderBtn').classList.toggle('hidden',lineCount===0);
+}
+$('#refreshOrderBtn').onclick=refreshOrderReview;
+$('#generateOrderBtn').onclick=async()=>{
+  const rows=[...orderDraft.values()].filter(x=>Number(x.orderQty)>0);
+  if(!rows.length)return;
+  const total=rows.reduce((s,x)=>s+Number(x.orderQty)*Number(x.vi.current_price||0),0);
+  if(!confirm(`Generate an order snapshot with ${rows.length} line${rows.length===1?'':'s'} totaling ${money(total)}?`))return;
+  const orderId=crypto.randomUUID();
+  const order={order_id:orderId,order_date:new Date().toISOString().slice(0,10),status:'draft',estimated_total:total,notes:`Generated from inventory session ${orderSession.inventory_session_id}`};
+  const {error}=await db.from('cutroom_orders').insert(order);
+  if(error){alert(error.message);return}
+  const lines=rows.map(x=>({
+    order_line_id:crypto.randomUUID(),
+    order_id:orderId,
+    vendor_item_id:x.vi.vendor_item_id,
+    quantity_on_hand_snapshot:Number(x.count.quantity_on_hand||0),
+    quantity_ordered:Number(x.orderQty),
+    unit_price_snapshot:Number(x.vi.current_price||0),
+    extended_cost:Number(x.orderQty)*Number(x.vi.current_price||0),
+    notes:null
+  }));
+  const {error:lineError}=await db.from('cutroom_order_lines').insert(lines);
+  if(lineError){
+    await db.from('cutroom_orders').delete().eq('order_id',orderId);
+    alert(lineError.message);return;
+  }
+  alert(`Order snapshot generated successfully.\n\n${rows.length} lines · ${money(total)}`);
+};
 
 boot();
 
