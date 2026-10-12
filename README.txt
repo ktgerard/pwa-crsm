@@ -1,3 +1,8 @@
+Cut Room Supply Manager v0.2.1
+
+FIX
+- Order generation no longer inserts extended_cost. Supabase calculates that generated column from quantity_ordered × unit_price_snapshot.
+
 Cut Room Supply Manager v0.2.0
 
 NEW

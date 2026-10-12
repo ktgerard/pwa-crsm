@@ -182,7 +182,6 @@ $('#generateOrderBtn').onclick=async()=>{
     quantity_on_hand_snapshot:Number(x.count.quantity_on_hand||0),
     quantity_ordered:Number(x.orderQty),
     unit_price_snapshot:Number(x.vi.current_price||0),
-    extended_cost:Number(x.orderQty)*Number(x.vi.current_price||0),
     notes:null
   }));
   const {error:lineError}=await db.from('cutroom_order_lines').insert(lines);
