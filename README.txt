@@ -1,3 +1,13 @@
+Cut Room Supply Manager v0.2.2
+
+DATA-INTEGRITY FIXES
+- Saved appears only after Supabase confirms the row write.
+- Blur and Enter force an immediate save.
+- Per-item saves are serialized to avoid overlapping writes.
+- Clearing a saved quantity removes its database row.
+- Completing a count flushes pending saves first.
+- Refresh/navigation warns while writes are pending.
+
 Cut Room Supply Manager v0.2.1
 
 FIX
