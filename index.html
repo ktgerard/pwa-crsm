@@ -29,6 +29,7 @@
       <button data-view="master" class="active">Master Supply List</button>
       <button data-view="count">Monthly Count</button>
       <button data-view="order">Order Review</button>
+      <button data-view="history">Order History</button>
     </nav>
 
     <section id="masterView">
@@ -66,6 +67,15 @@
         </div>
       </div>
       <div id="orderGroups"></div>
+    </section>
+    <section id="historyView" class="hidden">
+      <div class="count-actions card no-print">
+        <div><strong>Generated Orders</strong><div class="muted">Stored order snapshots; prices and quantities are not recalculated.</div></div>
+        <div class="button-row"><button id="reloadHistoryBtn">Refresh History</button><button id="printHistoryBtn" class="secondary hidden">Print Selected Order</button></div>
+      </div>
+      <div id="historyMessage" class="muted"></div>
+      <div id="historyList" class="history-list no-print"></div>
+      <div id="historyDetail"></div>
     </section>
   </section>
 </main>

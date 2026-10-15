@@ -28,3 +28,18 @@ button{border:0;border-radius:8px;padding:11px 15px;background:#111827;color:whi
  .order-table th:nth-child(4),.order-table td:nth-child(4),
  .order-table th:nth-child(5),.order-table td:nth-child(5){display:none}
 }
+
+.history-list{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.history-entry{display:flex;flex-direction:column;gap:4px;text-align:left;background:#374151;min-width:180px;font-size:13px}
+.history-entry.selected{background:#2563eb}.history-entry span{font-weight:400}
+.history-heading h2{margin:0 0 10px}.history-vendor h3{margin:0 0 10px}
+.history-table-wrap{overflow-x:auto}.history-vendor{break-inside:avoid}
+@media print{
+ body{background:white;color:black}header,.main-tabs,.no-print,#loginView,#masterView,#countView,#orderView{display:none!important}
+ #appView,#historyView,#historyDetail{display:block!important}
+ .history-heading,.history-vendor{border:0;border-radius:0;box-shadow:none;padding:6px 0}
+ .history-vendor{break-before:page}.history-vendor:first-of-type{break-before:auto}
+ .order-table{font-size:10px}.order-table th,.order-table td{padding:5px;border-color:#bbb}
+ .order-table th:nth-child(n),.order-table td:nth-child(n){display:table-cell}
+ @page{size:letter landscape;margin:.45in}
+}

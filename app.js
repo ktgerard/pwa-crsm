@@ -72,6 +72,8 @@ $$('.main-tabs button').forEach(b=>b.onclick=()=>{
   $('#masterView').classList.toggle('hidden',b.dataset.view!=='master');
   $('#countView').classList.toggle('hidden',b.dataset.view!=='count');
   $('#orderView').classList.toggle('hidden',b.dataset.view!=='order');
+  $('#historyView').classList.toggle('hidden',b.dataset.view!=='history');
+  if(b.dataset.view==='history') loadOrderHistory();
   if(b.dataset.view==='order') refreshOrderReview();
 });
 
@@ -217,8 +219,81 @@ $('#generateOrderBtn').onclick=async()=>{
     await db.from('cutroom_orders').delete().eq('order_id',orderId);
     alert(lineError.message);return;
   }
-  alert(`Order snapshot generated successfully.\n\n${rows.length} lines · ${money(total)}`);
+  alert(`Order snapshot generated successfully.\n\n${rows.length} lines · ${money(total)}\n\nOpen Order History to view or print it.`);
 };
+
+
+let historyOrders=[],historyLines=[],historyVendorItems=[],historyItems=[],historyVendors=[],selectedHistoryId=null;
+function fmtDate(v){if(!v)return '—';const d=new Date(v);return Number.isNaN(d.getTime())?String(v):d.toLocaleDateString()}
+async function loadAllRows(table,select='*'){
+ const result=[];for(let start=0;start<10000;start+=750){
+  const {data,error}=await db.from(table).select(select).range(start,start+749);
+  if(error)throw error;result.push(...(data||[]));if(!data||data.length<750)break;
+ }return result;
+}
+async function loadOrderHistory(){
+ $('#historyMessage').textContent='Loading generated orders…';
+ $('#historyList').innerHTML='';$('#historyDetail').innerHTML='';
+ $('#printHistoryBtn').classList.add('hidden');
+ try{
+  historyOrders=await loadAllRows('cutroom_orders');
+  historyOrders.sort((a,b)=>String(b.order_date||b.created_at||'').localeCompare(String(a.order_date||a.created_at||'')));
+  // Include inactive historical records so retired supplies can still be identified.
+  [historyLines,historyVendorItems,historyItems,historyVendors]=await Promise.all([
+   loadAllRows('cutroom_order_lines'),loadAllRows('cutroom_vendor_items'),
+   loadAllRows('cutroom_supply_items'),loadAllRows('cutroom_vendors')]);
+  $('#historyMessage').textContent=historyOrders.length?`${historyOrders.length} generated order${historyOrders.length===1?'':'s'}`:'No generated orders yet.';
+  renderHistoryList();
+  if(historyOrders.length)showHistoryOrder(historyOrders.some(o=>o.order_id===selectedHistoryId)?selectedHistoryId:historyOrders[0].order_id);
+ }catch(e){$('#historyMessage').textContent='Could not load order history: '+(e.message||e)}
+}
+function historyOrderLines(orderId){return historyLines.filter(l=>l.order_id===orderId)}
+function historyAmount(lines){return lines.reduce((sum,l)=>sum+Number(l.extended_cost??(Number(l.quantity_ordered||0)*Number(l.unit_price_snapshot||0))),0)}
+function renderHistoryList(){
+ const el=$('#historyList');el.innerHTML='';
+ historyOrders.forEach(o=>{
+  const lines=historyOrderLines(o.order_id),btn=document.createElement('button');
+  btn.className='history-entry'+(o.order_id===selectedHistoryId?' selected':'');
+  const amount=historyAmount(lines);
+  btn.innerHTML=`<strong>${esc(fmtDate(o.order_date||o.created_at))}</strong><span>${esc(o.status||'draft')} · ${lines.length} lines</span><strong>${money(lines.length?amount:o.estimated_total)}</strong>`;
+  btn.onclick=()=>showHistoryOrder(o.order_id);el.appendChild(btn);
+ });
+}
+function showHistoryOrder(id){
+ selectedHistoryId=id;const o=historyOrders.find(x=>x.order_id===id);if(!o)return;
+ renderHistoryList();$('#printHistoryBtn').classList.remove('hidden');
+ const lines=historyOrderLines(id),byVendor=new Map();
+ for(const l of lines){
+  const vi=historyVendorItems.find(v=>v.vendor_item_id===l.vendor_item_id);
+  const item=historyItems.find(i=>i.supply_item_id===vi?.supply_item_id);
+  const vendor=historyVendors.find(v=>v.vendor_id===vi?.vendor_id);
+  const name=vendor?.vendor_name||'Unknown supplier';
+  if(!byVendor.has(name))byVendor.set(name,[]);
+  byVendor.get(name).push({line:l,vi,item});
+ }
+ const total=historyAmount(lines),host=$('#historyDetail');host.innerHTML='';
+ const heading=document.createElement('div');heading.className='card history-heading';
+ heading.innerHTML=`<h2>Generated Order — ${esc(fmtDate(o.order_date||o.created_at))}</h2><div>Status: <strong>${esc(o.status||'draft')}</strong> · ${lines.length} lines · <strong>${money(lines.length?total:o.estimated_total)}</strong></div><div class="muted">Order ID: ${esc(o.order_id)}</div>${o.notes?`<div class="muted">${esc(o.notes)}</div>`:''}`;
+ host.appendChild(heading);
+ [...byVendor.entries()].sort((a,b)=>a[0].localeCompare(b[0])).forEach(([name,entries])=>{
+  const card=document.createElement('section');card.className='card history-vendor';
+  const subtotal=historyAmount(entries.map(x=>x.line));
+  const h=document.createElement('h3');h.textContent=name;card.appendChild(h);
+  const wrap=document.createElement('div');wrap.className='history-table-wrap';
+  const table=document.createElement('table');table.className='order-table';
+  table.innerHTML='<thead><tr><th>Description</th><th>SKU</th><th>Vendor Part / BB#</th><th>On Hand</th><th>Order Qty</th><th>Unit Price</th><th>Extended</th></tr></thead>';
+  const body=document.createElement('tbody');
+  entries.forEach(({line:l,vi,item})=>{
+   const tr=document.createElement('tr');
+   const vals=[item?.item_description||vi?.supply_item_id||l.vendor_item_id,vi?.sku||'—',vi?.vendor_part_number||'—',l.quantity_on_hand_snapshot??'—',l.quantity_ordered??'—',money(l.unit_price_snapshot),money(l.extended_cost??(Number(l.quantity_ordered||0)*Number(l.unit_price_snapshot||0)))];
+   vals.forEach(v=>{const td=document.createElement('td');td.textContent=String(v);tr.appendChild(td)});body.appendChild(tr);
+  });table.appendChild(body);wrap.appendChild(table);card.appendChild(wrap);
+  const foot=document.createElement('div');foot.className='order-total';foot.textContent='Supplier subtotal: '+money(subtotal);card.appendChild(foot);host.appendChild(card);
+ });
+ if(!lines.length){const p=document.createElement('p');p.textContent='No order lines found for this order.';host.appendChild(p)}
+}
+$('#reloadHistoryBtn').onclick=loadOrderHistory;
+$('#printHistoryBtn').onclick=()=>window.print();
 
 window.addEventListener('beforeunload',e=>{if(pending.size||saving.size){e.preventDefault();e.returnValue=''}});
 boot();

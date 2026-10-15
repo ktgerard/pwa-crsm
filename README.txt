@@ -1,3 +1,9 @@
+Cut Room Supply Manager v0.2.3 — Order History
+
+Adds an Order History tab, listing generated orders with their saved statuses, date, line count and total. Select an order to view supplier-grouped line details, separate SKU and vendor part/BB#, saved quantities and prices, and printable supplier sheets. Read-only history in this release; no SQL migration.
+
+NOTE: Historical item descriptions and vendor identifiers are looked up from current master records, including inactive items. Quantities and prices come from saved order lines. If a master record is later edited or deleted, its descriptive information may change or be unavailable; full immutable descriptions would require additional snapshot fields in a future migration.
+
 Cut Room Supply Manager v0.2.2
 
 DATA-INTEGRITY FIXES
